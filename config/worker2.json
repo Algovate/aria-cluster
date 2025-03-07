@@ -1,0 +1,33 @@
+{
+    "dispatcher": {
+        "url": "http://localhost:8000",
+        "heartbeat_interval": 30
+    },
+    "aria2": {
+        "host": "localhost",
+        "port": 6800,
+        "rpc_secret": "",
+        "rpc_path": "/jsonrpc",
+        "download_dir": "downloads",
+        "global_options": {
+            "max-concurrent-downloads": 5,
+            "max-connection-per-server": 16,
+            "split": 8,
+            "min-split-size": "1M",
+            "continue": true,
+            "max-overall-download-limit": "0",
+            "max-overall-upload-limit": "0"
+        }
+    },
+    "worker": {
+        "name": "worker-2",
+        "max_tasks": 5,
+        "capabilities": {
+            "disk_space": "100G",
+            "bandwidth": "100M",
+            "supports_bt": true,
+            "supports_metalink": true
+        }
+    },
+    "log_level": "info"
+}

@@ -1,0 +1,51 @@
+version: '3'
+
+services:
+  dispatcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    command: python -m scripts.run_dispatcher
+    environment:
+      - CONFIG_PATH=/app/config/dispatcher.json
+    networks:
+      - aria2c_network
+
+  worker1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./config:/app/config
+      - ./downloads/worker1:/downloads
+    command: python -m scripts.run_worker
+    environment:
+      - CONFIG_PATH=/app/config/worker.json
+    depends_on:
+      - dispatcher
+    networks:
+      - aria2c_network
+
+  worker2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./config:/app/config
+      - ./downloads/worker2:/downloads
+    command: python -m scripts.run_worker
+    environment:
+      - CONFIG_PATH=/app/config/worker2.json
+    depends_on:
+      - dispatcher
+    networks:
+      - aria2c_network
+
+networks:
+  aria2c_network:
+    driver: bridge 

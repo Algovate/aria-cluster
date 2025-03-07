@@ -1,0 +1,9 @@
+# Python files
+__pycache__/
+*.py[cod]
+*.so
+
+# Project specific
+data/
+downloads/
+*.log
