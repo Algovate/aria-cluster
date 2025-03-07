@@ -26,6 +26,8 @@ services:
     command: python -m scripts.run_worker
     environment:
       - CONFIG_PATH=/app/config/worker.json
+    ports:
+      - "6800:6800"
     depends_on:
       - dispatcher
     networks:
@@ -41,10 +43,22 @@ services:
     command: python -m scripts.run_worker
     environment:
       - CONFIG_PATH=/app/config/worker2.json
+    ports:
+      - "6801:6800"
     depends_on:
       - dispatcher
     networks:
       - aria2c_network
+
+  ariang:
+    image: p3terx/ariang
+    ports:
+      - "6880:6880"
+    networks:
+      - aria2c_network
+    depends_on:
+      - worker1
+      - worker2
 
 networks:
   aria2c_network:
