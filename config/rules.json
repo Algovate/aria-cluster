@@ -1,0 +1,5 @@
+{
+  "site_1": ["worker1","worker2","worker3"],
+  "site_2": ["worker4"],
+  "site_3": ["worker2", "worker4"]
+}

@@ -1,0 +1,75 @@
+digraph G {
+  rankdir=TB;
+
+  /* Node styles */
+  node [shape=rect, style=filled, fillcolor=lightblue, fontname=Arial];
+  edge [fontname=Arial];
+
+  /* Components */
+  Client [label="CLI Client\n(Scripts)", fillcolor=lightgreen];
+  WebUI [label="Web UI\n(Custom Dashboard)", fillcolor=lightgreen];
+
+  Dispatcher [label="Dispatcher\n(FastAPI Server)"];
+  MemoryDB [label="Memory Database"];
+  Scheduler [label="Task Scheduler"];
+
+  Worker1 [label="Worker Node 1"];
+  Worker2 [label="Worker Node 2"];
+  Aria2c1 [label="aria2c Process 1", fillcolor=lightyellow];
+  Aria2c2 [label="aria2c Process 2", fillcolor=lightyellow];
+
+  /* Connections */
+  Client -> Dispatcher [label="REST API"];
+  WebUI -> Dispatcher [label="REST API"];
+  WebUI -> Worker1 [label="RPC API"];
+  WebUI -> Worker2 [label="RPC API"];
+
+  Dispatcher -> MemoryDB [dir=both];
+  Dispatcher -> Scheduler;
+
+  Dispatcher -> Worker1 [dir=both, label="WebSocket"];
+  Dispatcher -> Worker2 [dir=both, label="WebSocket"];
+
+  Worker1 -> Aria2c1 [dir=both, label="RPC API"];
+  Worker2 -> Aria2c2 [dir=both, label="RPC API"];
+
+  /* Subgraphs */
+  subgraph cluster_dispatcher {
+    label="Dispatcher Container";
+    style=dashed;
+    color=gray;
+    Dispatcher;
+    MemoryDB;
+    Scheduler;
+  }
+
+  subgraph cluster_worker1 {
+    label="Worker1 Container";
+    style=dashed;
+    color=gray;
+    Worker1;
+    Aria2c1;
+  }
+
+  subgraph cluster_worker2 {
+    label="Worker2 Container";
+    style=dashed;
+    color=gray;
+    Worker2;
+    Aria2c2;
+  }
+
+  subgraph cluster_webui {
+    label="Web UI Container";
+    style=dashed;
+    color=gray;
+    WebUI;
+  }
+
+  /* Storage */
+  DownloadStorage1 [label="Downloaded Files\nWorker 1", shape=cylinder, fillcolor=lightgrey];
+  DownloadStorage2 [label="Downloaded Files\nWorker 2", shape=cylinder, fillcolor=lightgrey];
+
+  Aria2c1 -> DownloadStorage1;
+  Aria2c2 -> DownloadStorage2;
+}

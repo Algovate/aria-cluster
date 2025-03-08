@@ -50,15 +50,16 @@ services:
     networks:
       - aria2c_network
 
-  ariang:
-    image: p3terx/ariang
+  web_ui:
+    image: nginx:alpine
+    volumes:
+      - ./web_ui:/usr/share/nginx/html
     ports:
-      - "6880:6880"
+      - "8080:80"
     networks:
       - aria2c_network
     depends_on:
-      - worker1
-      - worker2
+      - dispatcher
 
 networks:
   aria2c_network:

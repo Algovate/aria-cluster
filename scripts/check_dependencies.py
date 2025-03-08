@@ -41,7 +41,7 @@ def check_aria2c():
 def install_aria2c():
     """Install aria2c."""
     system = platform.system().lower()
-    
+
     if system == "linux":
         # Try to detect the Linux distribution
         try:
@@ -51,10 +51,10 @@ def install_aria2c():
                     if "=" in line:
                         key, value = line.strip().split("=", 1)
                         os_info[key] = value.strip('"')
-            
+
             if "ID" in os_info:
                 distro = os_info["ID"].lower()
-                
+
                 if distro in ["ubuntu", "debian", "linuxmint"]:
                     logger.info("Installing aria2c using apt...")
                     subprocess.run(["sudo", "apt", "update"], check=True)
@@ -77,7 +77,7 @@ def install_aria2c():
         except Exception as e:
             logger.error(f"Error detecting Linux distribution: {str(e)}")
             return False
-    
+
     elif system == "darwin":
         # macOS
         try:
@@ -88,19 +88,19 @@ def install_aria2c():
             except (FileNotFoundError, subprocess.CalledProcessError):
                 logger.error("Homebrew is not installed. Please install Homebrew first: https://brew.sh/")
                 return False
-            
+
             # Install aria2c
             subprocess.run(["brew", "install", "aria2"], check=True)
             return True
         except Exception as e:
             logger.error(f"Error installing aria2c: {str(e)}")
             return False
-    
+
     elif system == "windows":
         logger.error("Automatic installation on Windows is not supported.")
         logger.info("Please download and install aria2c manually from: https://github.com/aria2/aria2/releases")
         return False
-    
+
     else:
         logger.error(f"Unsupported operating system: {system}")
         return False
@@ -109,13 +109,13 @@ def install_aria2c():
 def main():
     """Main function."""
     logger.info("Checking dependencies...")
-    
+
     if check_aria2c():
         logger.info("All dependencies are installed!")
         return 0
-    
+
     logger.info("aria2c is not installed. Attempting to install...")
-    
+
     if install_aria2c():
         logger.info("aria2c has been installed successfully!")
         return 0
@@ -125,4 +125,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())
