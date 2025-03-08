@@ -56,17 +56,17 @@ async def verify_api_key(x_api_key: Optional[str] = Header(None)):
     """Verify the API key if required."""
     if not config.get("security", {}).get("api_key_required", False):
         return True
-        
+
     api_keys = config.get("security", {}).get("api_keys", [])
     if not api_keys:
         return True
-        
+
     if not x_api_key or x_api_key not in api_keys:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key"
         )
-    
+
     return True
 
 
@@ -74,7 +74,7 @@ async def verify_api_key(x_api_key: Optional[str] = Header(None)):
 async def startup_event():
     """Initialize the server on startup."""
     logger.info("Starting aria2c cluster dispatcher")
-    
+
     # Start the scheduler
     await scheduler.start()
 
@@ -83,7 +83,7 @@ async def startup_event():
 async def shutdown_event():
     """Clean up on shutdown."""
     logger.info("Shutting down aria2c cluster dispatcher")
-    
+
     # Stop the scheduler
     await scheduler.stop()
 
@@ -116,7 +116,7 @@ async def update_task(task_id: str, task_data: TaskUpdate):
     """Update a task."""
     # Convert the model to a dict and remove None values
     update_data = {k: v for k, v in task_data.dict().items() if v is not None}
-    
+
     task = await database.update_task(task_id, **update_data)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -129,7 +129,7 @@ async def delete_task(task_id: str):
     task = await database.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-        
+
     # If the task is assigned to a worker, cancel it first
     if task.worker_id and task.status in [TaskStatus.QUEUED, TaskStatus.DOWNLOADING]:
         worker = await database.get_worker(task.worker_id)
@@ -141,16 +141,16 @@ async def delete_task(task_id: str):
                     "action": "cancel_task",
                     "task_id": task_id
                 }))
-    
+
     # Unassign from worker if needed
     if task.worker_id:
         await database.unassign_task_from_worker(task_id)
-    
+
     # Delete the task
     success = await database.delete_task(task_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete task")
-        
+
     return {"message": f"Task {task_id} deleted"}
 
 
@@ -188,7 +188,7 @@ async def update_worker(worker_id: str, worker_data: WorkerUpdate):
     """Update a worker."""
     # Convert the model to a dict and remove None values
     update_data = {k: v for k, v in worker_data.dict().items() if v is not None}
-    
+
     worker = await database.update_worker(worker_id, **update_data)
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -201,17 +201,17 @@ async def delete_worker(worker_id: str):
     worker = await database.get_worker(worker_id)
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
-        
+
     # Unassign all tasks from this worker
     for task_id in worker.current_tasks:
         await database.unassign_task_from_worker(task_id)
         await database.update_task(task_id, status=TaskStatus.PENDING)
-    
+
     # Delete the worker
     success = await database.delete_worker(worker_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete worker")
-        
+
     return {"message": f"Worker {worker_id} deleted"}
 
 
@@ -221,12 +221,12 @@ async def get_system_status():
     """Get system status information."""
     active_workers = len(await database.get_workers_by_status(WorkerStatus.ONLINE))
     active_workers += len(await database.get_workers_by_status(WorkerStatus.BUSY))
-    
+
     tasks = await database.get_all_tasks()
     tasks_by_status = await database.get_task_counts_by_status()
-    
+
     system_load = await database.get_system_load()
-    
+
     return SystemStatus(
         active_workers=active_workers,
         total_tasks=len(tasks),
@@ -240,20 +240,20 @@ async def get_system_status():
 async def worker_websocket(websocket: WebSocket, worker_id: str):
     """WebSocket endpoint for worker communication."""
     await websocket.accept()
-    
+
     # Check if the worker exists
     worker = await database.get_worker(worker_id)
     if not worker:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Worker not found")
         return
-    
+
     # Store the WebSocket connection
     connected_workers[worker_id] = websocket
-    
+
     try:
         # Update worker status
         await database.update_worker_heartbeat(worker_id)
-        
+
         # Send initial tasks
         worker_tasks = await database.get_tasks_by_worker(worker_id)
         if worker_tasks:
@@ -261,19 +261,19 @@ async def worker_websocket(websocket: WebSocket, worker_id: str):
                 "action": "initial_tasks",
                 "tasks": [task.dict() for task in worker_tasks]
             }))
-        
+
         # Handle messages
         while True:
             data = await websocket.receive_text()
             await handle_worker_message(worker_id, data)
-            
+
     except WebSocketDisconnect:
         logger.info(f"Worker {worker_id} disconnected")
     finally:
         # Remove the connection
         if worker_id in connected_workers:
             del connected_workers[worker_id]
-        
+
         # Update worker status
         worker = await database.get_worker(worker_id)
         if worker:
@@ -285,62 +285,62 @@ async def handle_worker_message(worker_id: str, message: str):
     try:
         data = json.loads(message)
         action = data.get("action")
-        
+
         if action == "heartbeat":
             # Update worker heartbeat
             await database.update_worker_heartbeat(worker_id)
-            
+
             # Update worker status if provided
             if "status" in data:
                 status_str = data["status"]
                 if status_str in [s.value for s in WorkerStatus]:
                     await database.update_worker(worker_id, status=WorkerStatus(status_str))
-            
+
             # Update worker slots if provided
             if "used_slots" in data:
                 await database.update_worker(worker_id, used_slots=data["used_slots"])
-                
+
         elif action == "task_update":
             # Update task status
             task_id = data.get("task_id")
             if not task_id:
                 logger.error(f"Missing task_id in task_update from worker {worker_id}")
                 return
-                
+
             task = await database.get_task(task_id)
             if not task:
                 logger.error(f"Unknown task {task_id} in update from worker {worker_id}")
                 return
-                
+
             # Extract update data
             update_data = {}
             for field in ["status", "progress", "download_speed", "aria2_gid", "error_message", "result"]:
                 if field in data:
                     update_data[field] = data[field]
-            
+
             # Update the task
             await database.update_task(task_id, **update_data)
-            
+
             # Handle task completion or failure
             if "status" in data:
                 status_str = data["status"]
                 if status_str in [TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELED.value]:
                     # Unassign the task from the worker
                     await database.unassign_task_from_worker(task_id)
-                    
+
         elif action == "worker_update":
             # Update worker information
             update_data = {}
             for field in ["capabilities", "total_slots", "used_slots"]:
                 if field in data:
                     update_data[field] = data[field]
-            
+
             if update_data:
                 await database.update_worker(worker_id, **update_data)
-                
+
         else:
             logger.warning(f"Unknown action '{action}' from worker {worker_id}")
-            
+
     except json.JSONDecodeError:
         logger.error(f"Invalid JSON from worker {worker_id}")
     except Exception as e:
@@ -352,7 +352,7 @@ def main():
     """Run the server."""
     host = config.get("host", "0.0.0.0")
     port = config.get("port", 8000)
-    
+
     uvicorn.run(
         "dispatcher.server:app",
         host=host,
@@ -362,4 +362,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
