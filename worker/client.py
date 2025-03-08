@@ -7,14 +7,16 @@ import logging
 import asyncio
 import socket
 import platform
+import time
+import psutil
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 import aiohttp
-import websockets
+from websockets.client import connect as ws_connect
 from websockets.exceptions import ConnectionClosed
 
-from common.models import Task, TaskStatus
+from common.models import Task, TaskStatus, HealthMetrics, PerformanceStats
 from common.utils import load_config, generate_id
 from worker.aria2c import Aria2cClient
 
@@ -38,6 +40,7 @@ class WorkerClient:
         # Set up dispatcher connection info
         self.dispatcher_url = self.dispatcher_config.get("url", "http://localhost:8000")
         self.heartbeat_interval = self.dispatcher_config.get("heartbeat_interval", 30)
+        self.api_key = self.dispatcher_config.get("api_key", "")
 
         # Set up worker info
         self.worker_id = None
@@ -60,6 +63,75 @@ class WorkerClient:
         self.tasks: Dict[str, Dict[str, Any]] = {}
         self.running = False
         self.ws = None
+
+        # Health monitoring
+        self.start_time = time.time()
+        self.error_count = 0
+        self.success_count = 0
+        self.total_bytes_downloaded = 0
+        self.peak_download_speed = 0
+        self.download_speeds: List[int] = []
+
+    async def collect_system_metrics(self) -> HealthMetrics:
+        """Collect system health metrics."""
+        try:
+            # Get CPU usage
+            cpu_usage = psutil.cpu_percent(interval=1)
+
+            # Get memory usage
+            memory = psutil.virtual_memory()
+            memory_usage = memory.percent
+
+            # Get disk usage
+            disk = psutil.disk_usage(os.path.abspath(os.path.dirname(__file__)))
+            disk_usage = disk.percent
+
+            # Get network I/O
+            net_io = psutil.net_io_counters()
+            network_rx = net_io.bytes_recv
+            network_tx = net_io.bytes_sent
+
+            # Calculate uptime
+            uptime = int(time.time() - self.start_time)
+
+            return {
+                "cpu_usage": cpu_usage,
+                "memory_usage": memory_usage,
+                "disk_usage": disk_usage,
+                "network_rx": network_rx,
+                "network_tx": network_tx,
+                "error_count": self.error_count,
+                "success_count": self.success_count,
+                "uptime": uptime
+            }
+        except Exception as e:
+            logger.error(f"Error collecting system metrics: {str(e)}")
+            return {
+                "cpu_usage": 0.0,
+                "memory_usage": 0.0,
+                "disk_usage": 0.0,
+                "network_rx": 0,
+                "network_tx": 0,
+                "error_count": self.error_count,
+                "success_count": self.success_count,
+                "uptime": 0
+            }
+
+    def calculate_performance_stats(self) -> PerformanceStats:
+        """Calculate performance statistics."""
+        avg_speed = (
+            sum(self.download_speeds) // len(self.download_speeds)
+            if self.download_speeds
+            else 0
+        )
+
+        return {
+            "avg_download_speed": avg_speed,
+            "peak_download_speed": self.peak_download_speed,
+            "total_bytes_downloaded": self.total_bytes_downloaded,
+            "completed_tasks": self.success_count,
+            "failed_tasks": self.error_count
+        }
 
     async def start(self):
         """Start the worker client."""
@@ -119,8 +191,12 @@ class WorkerClient:
                     "capabilities": self.capabilities,
                     "total_slots": self.max_tasks
                 }
+                
+                headers = {}
+                if self.api_key:
+                    headers["X-API-Key"] = self.api_key
 
-                async with session.post(url, json=payload) as response:
+                async with session.post(url, json=payload, headers=headers) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         logger.error(f"Registration error: {response.status} - {error_text}")
@@ -154,9 +230,11 @@ class WorkerClient:
                         continue
 
                 ws_url = f"{self.dispatcher_url.replace('http', 'ws')}/ws/worker/{self.worker_id}"
+                if self.api_key:
+                    ws_url += f"?api_key={self.api_key}"
                 logger.info(f"Connecting to dispatcher WebSocket at {ws_url}")
 
-                async with websockets.connect(ws_url) as websocket:
+                async with ws_connect(ws_url) as websocket:
                     self.ws = websocket
                     logger.info("Connected to dispatcher WebSocket")
 
@@ -208,10 +286,16 @@ class WorkerClient:
             # Get current task count
             used_slots = len(self.tasks)
 
+            # Collect health metrics
+            health_metrics = await self.collect_system_metrics()
+            performance_stats = self.calculate_performance_stats()
+
             message = {
                 "action": "heartbeat",
                 "status": "busy" if used_slots >= self.max_tasks else "online",
                 "used_slots": used_slots,
+                "health_metrics": health_metrics,
+                "performance_stats": performance_stats,
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -411,6 +495,20 @@ class WorkerClient:
         if not self.ws:
             logger.warning("Cannot update task status: not connected to dispatcher")
             return
+
+        # Update performance metrics
+        if download_speed is not None:
+            self.download_speeds.append(download_speed)
+            if len(self.download_speeds) > 100:  # Keep last 100 speed measurements
+                self.download_speeds.pop(0)
+            self.peak_download_speed = max(self.peak_download_speed, download_speed)
+
+        if status == TaskStatus.COMPLETED:
+            self.success_count += 1
+            if result and "total_length" in result:
+                self.total_bytes_downloaded += result["total_length"]
+        elif status == TaskStatus.FAILED:
+            self.error_count += 1
 
         update_data = {
             "action": "task_update",

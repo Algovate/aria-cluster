@@ -1,7 +1,8 @@
 {
     "dispatcher": {
         "url": "http://dispatcher:8000",
-        "heartbeat_interval": 30
+        "heartbeat_interval": 30,
+        "api_key": "default-api-key-change-me"
     },
     "aria2": {
         "host": "0.0.0.0",

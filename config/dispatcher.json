@@ -18,7 +18,7 @@
         "offline_threshold": 300
     },
     "security": {
-        "api_key_required": false,
-        "api_keys": []
+        "api_key_required": true,
+        "api_keys": ["default-api-key-change-me"]
     }
 }
