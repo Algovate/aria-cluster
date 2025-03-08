@@ -264,10 +264,10 @@ function handleRpcMethodChange() {
     const method = document.getElementById('rpcMethod').value;
     const customMethodContainer = document.getElementById('customMethodContainer');
     const paramsInput = document.getElementById('rpcParams');
-    
+
     // Show/hide custom method input
     customMethodContainer.style.display = method === 'custom' ? 'block' : 'none';
-    
+
     // Set default parameters based on method
     switch (method) {
         case 'aria2.tellWaiting':
@@ -298,18 +298,18 @@ async function refreshData() {
         return;
     }
     lastRefreshTime = now;
-    
+
     try {
         // Determine which section is active
         const activeSection = document.querySelector('.content-section.active-section').id;
-        
+
         // Show loading indicator
         document.getElementById('refresh-btn').innerHTML = '<span class="loading-spinner"></span>';
-        
+
         // Get system status (always needed for dashboard)
         const systemStatus = await fetchWithAuth('/status');
         updateDashboardStatus(systemStatus);
-        
+
         // Load tasks if on dashboard or tasks section
         if (activeSection === 'dashboard-section' || activeSection === 'tasks-section') {
             const tasks = await fetchWithAuth('/tasks');
@@ -319,10 +319,10 @@ async function refreshData() {
                 updateAllTasks(tasks);
             }
         }
-        
+
         // Load workers if on dashboard, workers section, or direct control section
-        if (activeSection === 'dashboard-section' || 
-            activeSection === 'workers-section' || 
+        if (activeSection === 'dashboard-section' ||
+            activeSection === 'workers-section' ||
             activeSection === 'direct-control-section') {
             const workers = await fetchWithAuth('/workers');
             if (activeSection === 'dashboard-section') {
@@ -331,12 +331,12 @@ async function refreshData() {
                 updateAllWorkers(workers);
             }
         }
-        
+
         // Update active downloads if on direct control section
         if (activeSection === 'direct-control-section') {
             await updateActiveDownloads();
         }
-        
+
     } catch (error) {
         console.error('Error refreshing data:', error);
     } finally {
@@ -402,13 +402,13 @@ function updateRecentTasks(tasks) {
 function updateWorkerStatus(workers) {
     const table = document.getElementById('workers-table').querySelector('tbody');
     table.innerHTML = '';
-    
+
     // Update worker RPC ports map
     workerRpcPorts.clear();
     workers.forEach(worker => {
         workerRpcPorts.set(worker.id, worker.port);
     });
-    
+
     if (workers.length === 0) {
         const row = table.insertRow();
         const cell = row.insertCell();
@@ -417,18 +417,18 @@ function updateWorkerStatus(workers) {
         cell.className = 'text-center';
         return;
     }
-    
+
     workers.forEach(worker => {
         const row = table.insertRow();
         row.insertCell().textContent = worker.hostname;
-        
+
         const statusCell = row.insertCell();
         statusCell.textContent = worker.status;
         statusCell.className = `worker-${worker.status}`;
-        
+
         row.insertCell().textContent = `${worker.used_slots}/${worker.total_slots}`;
         row.insertCell().textContent = `${worker.load_percentage.toFixed(1)}%`;
-        
+
         // Add click event to show worker details
         row.style.cursor = 'pointer';
         row.addEventListener('click', () => showWorkerDetails(worker.id));
@@ -535,13 +535,13 @@ function updateAllTasks(tasks) {
 function updateAllWorkers(workers) {
     const table = document.getElementById('all-workers-table').querySelector('tbody');
     table.innerHTML = '';
-    
+
     // Update worker RPC ports map
     workerRpcPorts.clear();
     workers.forEach(worker => {
         workerRpcPorts.set(worker.id, worker.port);
     });
-    
+
     if (workers.length === 0) {
         const row = table.insertRow();
         const cell = row.insertCell();
@@ -550,26 +550,26 @@ function updateAllWorkers(workers) {
         cell.className = 'text-center';
         return;
     }
-    
+
     workers.forEach(worker => {
         const row = table.insertRow();
-        
+
         row.insertCell().textContent = worker.id.substring(0, 8);
         row.insertCell().textContent = worker.hostname;
         row.insertCell().textContent = worker.address;
-        
+
         const statusCell = row.insertCell();
         statusCell.textContent = worker.status;
         statusCell.className = `worker-${worker.status}`;
-        
+
         row.insertCell().textContent = worker.current_tasks.length;
         row.insertCell().textContent = worker.available_slots;
         row.insertCell().textContent = `${worker.load_percentage.toFixed(1)}%`;
-        
+
         const heartbeatCell = row.insertCell();
         heartbeatCell.textContent = worker.last_heartbeat ? formatDate(worker.last_heartbeat) : '-';
         heartbeatCell.title = worker.last_heartbeat ? new Date(worker.last_heartbeat).toLocaleString() : '';
-        
+
         // Add click event to show worker details
         row.style.cursor = 'pointer';
         row.addEventListener('click', () => showWorkerDetails(worker.id));
@@ -922,13 +922,13 @@ function showRpcModal() {
     // Populate worker select
     const workerSelect = document.getElementById('workerSelect');
     workerSelect.innerHTML = '';
-    
+
     // Add "All Workers" option for applicable commands
     const allWorkersOption = document.createElement('option');
     allWorkersOption.value = 'all';
     allWorkersOption.textContent = 'All Workers';
     workerSelect.appendChild(allWorkersOption);
-    
+
     // Add individual workers
     workerRpcPorts.forEach((port, workerId) => {
         const option = document.createElement('option');
@@ -936,17 +936,17 @@ function showRpcModal() {
         option.textContent = `Worker ${workerId}`;
         workerSelect.appendChild(option);
     });
-    
+
     const modal = new bootstrap.Modal(document.getElementById('directRpcModal'));
     modal.show();
 }
 
 // Execute RPC Command
 async function executeRpcCommand() {
-    const method = document.getElementById('rpcMethod').value === 'custom' 
-        ? document.getElementById('customMethod').value 
+    const method = document.getElementById('rpcMethod').value === 'custom'
+        ? document.getElementById('customMethod').value
         : document.getElementById('rpcMethod').value;
-    
+
     let params;
     try {
         params = JSON.parse(document.getElementById('rpcParams').value || '[]');
@@ -954,15 +954,15 @@ async function executeRpcCommand() {
         showToast('Invalid JSON parameters', 'error');
         return;
     }
-    
+
     const workerId = document.getElementById('workerSelect').value;
-    
+
     try {
         let results;
         if (workerId === 'all') {
             // Execute on all workers
             results = await Promise.all(
-                Array.from(workerRpcPorts.entries()).map(([id, port]) => 
+                Array.from(workerRpcPorts.entries()).map(([id, port]) =>
                     sendRpcRequest(id, port, method, params)
                 )
             );
@@ -970,9 +970,9 @@ async function executeRpcCommand() {
             // Execute on single worker
             results = await sendRpcRequest(workerId, workerRpcPorts.get(workerId), method, params);
         }
-        
+
         showRpcResult(results);
-        
+
     } catch (error) {
         console.error('RPC execution failed:', error);
         showToast('RPC execution failed: ' + error.message, 'error');
@@ -987,7 +987,7 @@ async function sendRpcRequest(workerId, port, method, params) {
         method: method,
         params: params
     };
-    
+
     try {
         const response = await fetch(`http://localhost:${port}/jsonrpc`, {
             method: 'POST',
@@ -996,21 +996,21 @@ async function sendRpcRequest(workerId, port, method, params) {
             },
             body: JSON.stringify(rpcRequest)
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const result = await response.json();
         if (result.error) {
             throw new Error(result.error.message);
         }
-        
+
         return {
             workerId: workerId,
             result: result.result
         };
-        
+
     } catch (error) {
         console.error(`RPC request to worker ${workerId} failed:`, error);
         throw error;
@@ -1021,7 +1021,7 @@ async function sendRpcRequest(workerId, port, method, params) {
 function showRpcResult(results) {
     const resultModal = new bootstrap.Modal(document.getElementById('rpcResultModal'));
     const resultContent = document.getElementById('rpcResultContent');
-    
+
     if (Array.isArray(results)) {
         // Multiple worker results
         resultContent.textContent = JSON.stringify(results, null, 2);
@@ -1029,14 +1029,14 @@ function showRpcResult(results) {
         // Single worker result
         resultContent.textContent = JSON.stringify(results.result, null, 2);
     }
-    
+
     resultModal.show();
 }
 
 // Execute Quick Action
 async function executeQuickAction(action) {
     const workerId = document.getElementById('activeDownloadsWorkerFilter').value;
-    
+
     let method, params;
     switch (action) {
         case 'getGlobalStat':
@@ -1066,7 +1066,7 @@ async function executeQuickAction(action) {
             showToast('Unknown action', 'error');
             return;
     }
-    
+
     try {
         let results;
         if (workerId === 'all') {
@@ -1078,14 +1078,14 @@ async function executeQuickAction(action) {
         } else {
             results = await sendRpcRequest(workerId, workerRpcPorts.get(workerId), method, params);
         }
-        
+
         showRpcResult(results);
-        
+
         // Refresh active downloads table if needed
         if (['tellActive', 'purgeDownloadResult'].includes(action)) {
             await updateActiveDownloads();
         }
-        
+
     } catch (error) {
         console.error('Quick action failed:', error);
         showToast('Quick action failed: ' + error.message, 'error');
@@ -1096,10 +1096,10 @@ async function executeQuickAction(action) {
 async function updateActiveDownloads() {
     const table = document.getElementById('active-downloads-table').querySelector('tbody');
     table.innerHTML = '';
-    
+
     try {
         const activeDownloads = [];
-        
+
         // Fetch active downloads from all workers
         await Promise.all(Array.from(workerRpcPorts.entries()).map(async ([workerId, port]) => {
             try {
@@ -1114,7 +1114,7 @@ async function updateActiveDownloads() {
                 console.error(`Failed to fetch active downloads from worker ${workerId}:`, error);
             }
         }));
-        
+
         if (activeDownloads.length === 0) {
             const row = table.insertRow();
             const cell = row.insertCell();
@@ -1123,14 +1123,14 @@ async function updateActiveDownloads() {
             cell.className = 'text-center';
             return;
         }
-        
+
         activeDownloads.forEach(download => {
             const row = table.insertRow();
-            
+
             row.insertCell().textContent = download.gid;
             row.insertCell().textContent = download.files[0]?.path || 'N/A';
             row.insertCell().textContent = formatBytes(download.totalLength);
-            
+
             const progressCell = row.insertCell();
             const progress = (download.completedLength / download.totalLength) * 100;
             progressCell.innerHTML = `
@@ -1139,10 +1139,10 @@ async function updateActiveDownloads() {
                 </div>
                 <small>${progress.toFixed(1)}%</small>
             `;
-            
+
             row.insertCell().textContent = formatSpeed(download.downloadSpeed);
             row.insertCell().textContent = download.workerId;
-            
+
             const actionsCell = row.insertCell();
             actionsCell.className = 'action-buttons';
             actionsCell.innerHTML = `
@@ -1153,19 +1153,19 @@ async function updateActiveDownloads() {
                     <i class="bi bi-x"></i>
                 </button>
             `;
-            
+
             // Add event listeners for action buttons
             actionsCell.querySelector('.pause-download').addEventListener('click', (e) => {
                 e.stopPropagation();
                 pauseDownload(download.gid, download.workerId);
             });
-            
+
             actionsCell.querySelector('.remove-download').addEventListener('click', (e) => {
                 e.stopPropagation();
                 removeDownload(download.gid, download.workerId);
             });
         });
-        
+
     } catch (error) {
         console.error('Failed to update active downloads:', error);
         showToast('Failed to update active downloads', 'error');
@@ -1189,7 +1189,7 @@ async function removeDownload(gid, workerId) {
     if (!confirm('Are you sure you want to remove this download?')) {
         return;
     }
-    
+
     try {
         await sendRpcRequest(workerId, workerRpcPorts.get(workerId), 'aria2.remove', [gid]);
         showToast('Download removed successfully');
@@ -1203,15 +1203,15 @@ async function removeDownload(gid, workerId) {
 // Format Bytes
 function formatBytes(bytes) {
     if (!bytes) return '0 B';
-    
+
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     let value = parseInt(bytes, 10);
     let unitIndex = 0;
-    
+
     while (value >= 1024 && unitIndex < units.length - 1) {
         value /= 1024;
         unitIndex++;
     }
-    
+
     return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
