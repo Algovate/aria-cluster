@@ -4,6 +4,7 @@ SQLite database for the dispatcher.
 import json
 import logging
 import sqlite3
+# aiosqlite is added to requirements.txt for async SQLite operations
 import aiosqlite
 from typing import Dict, List, Optional, Any
 from datetime import datetime
@@ -11,11 +12,12 @@ import os
 
 from common.models import Task, Worker, TaskStatus, WorkerStatus
 from common.utils import generate_id
+from dispatcher.database_interface import DatabaseInterface
 
 logger = logging.getLogger(__name__)
 
 
-class SQLiteDatabase:
+class SQLiteDatabase(DatabaseInterface):
     """SQLite database for the dispatcher."""
 
     def __init__(self, db_path: str = "data/dispatcher.db"):
@@ -77,33 +79,36 @@ class SQLiteDatabase:
 
     def _task_from_row(self, row) -> Task:
         """Convert a database row to a Task object."""
-        id, url, created_at, updated_at, status, priority, worker_id, aria2_gid, options_json, progress, download_speed, error_message, result_json = row
-
+        options_json = row['options']
+        result_json = row['result']
+        
         options = json.loads(options_json) if options_json else {}
         result = json.loads(result_json) if result_json else None
-
+        
         return Task(
-            id=id,
-            url=url,
-            created_at=datetime.fromisoformat(created_at),
-            updated_at=datetime.fromisoformat(updated_at),
-            status=TaskStatus(status),
-            priority=int(priority),
-            worker_id=worker_id,
-            aria2_gid=aria2_gid,
+            id=row['id'],
+            url=row['url'],
+            created_at=datetime.fromisoformat(row['created_at']),
+            updated_at=datetime.fromisoformat(row['updated_at']),
+            status=TaskStatus(row['status']),
+            priority=int(row['priority']),
+            worker_id=row['worker_id'],
+            aria2_gid=row['aria2_gid'],
             options=options,
-            progress=float(progress),
-            download_speed=download_speed,
-            error_message=error_message,
+            progress=float(row['progress']),
+            download_speed=row['download_speed'],
+            error_message=row['error_message'],
             result=result
         )
 
     def _worker_from_row(self, row) -> Worker:
         """Convert a database row to a Worker object."""
-        (id, hostname, address, port, status, connected_at, last_heartbeat,
-         capabilities_json, current_tasks_json, total_slots, used_slots,
-         health_metrics_json, error_history_json, performance_stats_json) = row
-
+        capabilities_json = row['capabilities']
+        current_tasks_json = row['current_tasks']
+        health_metrics_json = row['health_metrics']
+        error_history_json = row['error_history']
+        performance_stats_json = row['performance_stats']
+        
         capabilities = json.loads(capabilities_json) if capabilities_json else {}
         current_tasks = json.loads(current_tasks_json) if current_tasks_json else []
         health_metrics = json.loads(health_metrics_json) if health_metrics_json else {
@@ -124,19 +129,19 @@ class SQLiteDatabase:
             "completed_tasks": 0,
             "failed_tasks": 0
         }
-
+        
         return Worker(
-            id=id,
-            hostname=hostname,
-            address=address,
-            port=int(port),
-            status=WorkerStatus(status),
-            connected_at=datetime.fromisoformat(connected_at) if connected_at else None,
-            last_heartbeat=datetime.fromisoformat(last_heartbeat) if last_heartbeat else None,
+            id=row['id'],
+            hostname=row['hostname'],
+            address=row['address'],
+            port=int(row['port']),
+            status=WorkerStatus(row['status']),
+            connected_at=datetime.fromisoformat(row['connected_at']) if row['connected_at'] else None,
+            last_heartbeat=datetime.fromisoformat(row['last_heartbeat']) if row['last_heartbeat'] else None,
             capabilities=capabilities,
             current_tasks=current_tasks,
-            total_slots=int(total_slots),
-            used_slots=int(used_slots),
+            total_slots=int(row['total_slots']),
+            used_slots=int(row['used_slots']),
             health_metrics=health_metrics,
             error_history=error_history,
             performance_stats=performance_stats

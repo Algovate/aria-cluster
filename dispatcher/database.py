@@ -7,11 +7,12 @@ from datetime import datetime
 
 from common.models import Task, Worker, TaskStatus, WorkerStatus
 from common.utils import generate_id
+from dispatcher.database_interface import DatabaseInterface
 
 logger = logging.getLogger(__name__)
 
 
-class MemoryDatabase:
+class MemoryDatabase(DatabaseInterface):
     """Simple in-memory database for the dispatcher."""
 
     def __init__(self):

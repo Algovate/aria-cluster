@@ -7,6 +7,7 @@ from typing import Union, Optional
 
 from .database import MemoryDatabase
 from .sqlite_database import SQLiteDatabase
+from .database_interface import DatabaseInterface
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class DatabaseType:
     SQLITE = "sqlite"
 
 
-def get_database(db_type: str = None, db_path: str = None) -> Union[MemoryDatabase, SQLiteDatabase]:
+def get_database(db_type: str = None, db_path: str = None) -> DatabaseInterface:
     """
     Get a database instance based on the specified type.
 

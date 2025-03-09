@@ -1,4 +1,4 @@
-# Aria2c Cluster Task Dispatcher
+# Aria Cluster
 
 A distributed system for managing and dispatching download tasks across multiple aria2c instances running on different machines. The system consists of a central dispatcher server, worker nodes, and a modern web interface for easy management.
 
@@ -24,7 +24,7 @@ A distributed system for managing and dispatching download tasks across multiple
 ## Project Structure
 
 ```
-aria2c_cluster/
+aria_cluster/
 ├── dispatcher/         # Central dispatcher server
 ├── worker/            # Worker node client
 ├── web_ui/           # Web interface
@@ -39,8 +39,8 @@ The easiest way to get started is using Docker Compose:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/aria2c_cluster.git
-cd aria2c_cluster
+git clone https://github.com/yourusername/aria_cluster.git
+cd aria_cluster
 
 # Create necessary directories
 mkdir -p data downloads/worker1 downloads/worker2
