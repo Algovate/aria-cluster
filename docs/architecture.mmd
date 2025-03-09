@@ -1,0 +1,59 @@
+graph TB
+    %% Node definitions with styles
+    classDef default fill:#e6f3ff,stroke:#333,stroke-width:1px
+    classDef client fill:#90EE90,stroke:#333,stroke-width:1px
+    classDef process fill:#FFFFE0,stroke:#333,stroke-width:1px
+    classDef storage fill:#D3D3D3,stroke:#333,stroke-width:1px
+
+    %% Client nodes
+    Client["CLI Client<br/>(Scripts)"]:::client
+    WebUI["Web UI<br/>(Custom Dashboard)"]:::client
+
+    %% Dispatcher container
+    subgraph Dispatcher_Container[Dispatcher Container]
+        direction TB
+        Dispatcher["Dispatcher<br/>(FastAPI Server)"]
+        MemoryDB["Memory Database"]
+        Scheduler["Task Scheduler"]
+    end
+
+    %% Worker 1 container
+    subgraph Worker1_Container[Worker1 Container]
+        direction TB
+        Worker1["Worker Node 1"]
+        Aria2c1["aria2c Process 1"]:::process
+    end
+
+    %% Worker 2 container
+    subgraph Worker2_Container[Worker2 Container]
+        direction TB
+        Worker2["Worker Node 2"]
+        Aria2c2["aria2c Process 2"]:::process
+    end
+
+    %% Web UI container
+    subgraph WebUI_Container[Web UI Container]
+        direction TB
+        WebUI
+    end
+
+    %% Storage nodes
+    DownloadStorage1[(Downloaded Files<br/>Worker 1)]:::storage
+    DownloadStorage2[(Downloaded Files<br/>Worker 2)]:::storage
+
+    %% Connections
+    Client -->|REST API| Dispatcher
+    WebUI -->|REST API| Dispatcher
+    WebUI -->|RPC API| Worker1
+    WebUI -->|RPC API| Worker2
+
+    Dispatcher <-->|WebSocket| Worker1
+    Dispatcher <-->|WebSocket| Worker2
+    Dispatcher <--> MemoryDB
+    Dispatcher --> Scheduler
+
+    Worker1 <-->|RPC API| Aria2c1
+    Worker2 <-->|RPC API| Aria2c2
+
+    Aria2c1 --> DownloadStorage1
+    Aria2c2 --> DownloadStorage2

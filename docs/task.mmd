@@ -1,0 +1,51 @@
+stateDiagram-v2
+    [*] --> PENDING : Create Task (POST /tasks)
+
+    PENDING --> QUEUED : Scheduler Assignment
+    note right of PENDING
+        - No worker assigned
+        - Waiting for scheduler
+        - Can receive retried tasks
+    end note
+
+    QUEUED --> DOWNLOADING : Worker Starts Download
+    QUEUED --> CANCELED : Manual Cancel/Worker Offline
+    note right of QUEUED
+        - Has worker_id
+        - Has aria2_gid
+        - Awaiting worker start
+    end note
+
+    DOWNLOADING --> COMPLETED : Download Success
+    DOWNLOADING --> FAILED : Download Error
+    DOWNLOADING --> CANCELED : Manual Cancel/Worker Offline
+    note right of DOWNLOADING
+        - Active download
+        - Progress tracking
+        - Speed monitoring
+        - Worker heartbeat
+    end note
+
+    FAILED --> PENDING : Auto Retry
+    note right of FAILED
+        - Has error_message
+        - Retry count tracked
+        - Retry delay enforced
+    end note
+
+    COMPLETED --> [*]
+    note right of COMPLETED
+        - Has result data
+        - Files information
+        - Total length
+        - Completion time
+    end note
+
+    CANCELED --> [*]
+    note right of CANCELED
+        - Manual cancellation
+        - Worker disconnection
+        - System shutdown
+    end note
+
+    FAILED --> [*] : Max retries exceeded
