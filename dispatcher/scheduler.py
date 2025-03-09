@@ -23,6 +23,12 @@ class TaskScheduler:
         self.scheduling_lock = asyncio.Lock()
 
         # Extract configuration
+        # The strategy used to select which worker a task should be assigned to.
+        # Options:
+        #   - "least_loaded": Assigns tasks to workers with the lowest load percentage (default)
+        #   - "round_robin": Assigns tasks in sequence, rotating through available workers
+        #   - "random": Randomly selects a worker from available ones
+        # This strategy directly impacts load balancing and overall cluster efficiency.
         self.task_assignment_strategy = config.get("task_assignment", {}).get("strategy", "least_loaded")
         self.max_retries = config.get("task_assignment", {}).get("max_retries", 3)
         self.retry_delay = config.get("task_assignment", {}).get("retry_delay", 300)
