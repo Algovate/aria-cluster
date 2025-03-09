@@ -11,6 +11,7 @@ A distributed system for managing and dispatching download tasks across multiple
 - Automatic task distribution based on worker load
 - Fault tolerance and task recovery
 - Real-time status monitoring
+- Tag-based worker assignment for task categorization
 
 ### Web Interface
 
@@ -53,8 +54,9 @@ open http://localhost:8080
 
 ## Documentation
 
-- [Running Guide](RUNNING.md) - Detailed instructions for running the system
+- [Running Guide](docs/RUNNING.md) - Detailed instructions for running the system
 - [Web UI Guide](web_ui/README.md) - Web interface documentation
+- [Worker Tagging](docs/tagging.md) - Guide to using tag-based worker assignment
 - API Documentation (see below)
 
 ## Setup

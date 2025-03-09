@@ -1,3 +1,9 @@
+---
+noteId: "2d4c35a0fca411ef9ffaffd33dc20838"
+tags: []
+
+---
+
 # Running the Aria2c Cluster
 
 This guide provides detailed instructions for running the aria2c cluster task dispatcher system.

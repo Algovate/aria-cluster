@@ -28,6 +28,7 @@ class TaskScheduler:
         #   - "least_loaded": Assigns tasks to workers with the lowest load percentage (default)
         #   - "round_robin": Assigns tasks in sequence, rotating through available workers
         #   - "random": Randomly selects a worker from available ones
+        #   - "tags": Matches tasks and workers based on matching key-value tags
         # This strategy directly impacts load balancing and overall cluster efficiency.
         self.task_assignment_strategy = config.get("task_assignment", {}).get("strategy", "least_loaded")
         self.max_retries = config.get("task_assignment", {}).get("max_retries", 3)
@@ -124,6 +125,41 @@ class TaskScheduler:
             # Random selection
             import random
             return random.choice(available_workers)
+
+        elif self.task_assignment_strategy == "tags":
+            # Tag-based matching
+            task_tags = task.options.get("tags", {})
+
+            if not task_tags:
+                # If task has no tags, fall back to least loaded strategy
+                available_workers.sort(key=lambda w: w.load_percentage)
+                return available_workers[0]
+
+            # Find workers with matching tags
+            matching_workers = []
+            for worker in available_workers:
+                worker_tags = worker.capabilities.get("tags", {})
+
+                # Check if all task tags are matched by the worker
+                is_match = True
+                for key, value in task_tags.items():
+                    if key not in worker_tags or worker_tags[key] != value:
+                        is_match = False
+                        break
+
+                if is_match:
+                    matching_workers.append(worker)
+
+            if not matching_workers:
+                # No matching workers, use least loaded as fallback
+                logger.debug(f"No workers matching tags {task_tags} for task {task.id}")
+                available_workers.sort(key=lambda w: w.load_percentage)
+                return available_workers[0]
+
+            # Sort matching workers by load
+            matching_workers.sort(key=lambda w: w.load_percentage)
+            logger.debug(f"Selected worker {matching_workers[0].id} matching tags {task_tags} for task {task.id}")
+            return matching_workers[0]
 
         else:  # Default: "least_loaded"
             # Sort by load and select the least loaded worker
