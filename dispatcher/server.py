@@ -186,7 +186,7 @@ async def get_worker(worker_id: str):
 async def update_worker(worker_id: str, worker_data: WorkerUpdate):
     """Update a worker."""
     # Convert the model to a dict and remove None values
-    update_data = {k: v for k, v in worker_data.dict().items() if v is not None}
+    update_data = {k: v for k, v in worker_data.model_dump().items() if v is not None}
 
     worker = await database.update_worker(worker_id, **update_data)
     if not worker:
