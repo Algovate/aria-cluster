@@ -18,7 +18,7 @@ from common.models import (
     TaskCreate, TaskUpdate, WorkerCreate, WorkerUpdate, SystemStatus
 )
 from common.utils import load_config, generate_id
-from dispatcher.database import MemoryDatabase
+from dispatcher.database_factory import get_database, DatabaseType
 from dispatcher.scheduler import TaskScheduler
 
 # Configure logging
@@ -31,7 +31,12 @@ logger = logging.getLogger(__name__)
 # Global state
 config_path = os.environ.get("CONFIG_PATH", "config/dispatcher.json")
 config = load_config(config_path)
-database = MemoryDatabase()
+
+# Initialize database based on configuration or environment variables
+db_type = os.environ.get("DISPATCHER_DB_TYPE", config.get("database", {}).get("type", DatabaseType.MEMORY))
+db_path = os.environ.get("DISPATCHER_DB_PATH", config.get("database", {}).get("path", "data/dispatcher.db"))
+database = get_database(db_type, db_path)
+
 scheduler = TaskScheduler(database, config)
 connected_workers = {}
 

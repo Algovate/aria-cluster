@@ -3,11 +3,12 @@ Task scheduler for the aria2c cluster.
 """
 import logging
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from datetime import datetime, timedelta
 
 from common.models import Task, Worker, TaskStatus, WorkerStatus
 from dispatcher.database import MemoryDatabase
+from dispatcher.sqlite_database import SQLiteDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 class TaskScheduler:
     """Scheduler for assigning tasks to workers."""
 
-    def __init__(self, database: MemoryDatabase, config: Dict[str, Any]):
+    def __init__(self, database: Union[MemoryDatabase, SQLiteDatabase], config: Dict[str, Any]):
         """Initialize the scheduler."""
         self.db = database
         self.config = config
