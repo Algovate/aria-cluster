@@ -292,56 +292,37 @@ function handleRpcMethodChange() {
 
 // Data refreshing function
 async function refreshData() {
-    // Avoid refreshing too frequently
-    const now = Date.now();
-    if (now - lastRefreshTime < 1000) {
-        return;
-    }
-    lastRefreshTime = now;
-
     try {
-        // Determine which section is active
-        const activeSection = document.querySelector('.content-section.active-section').id;
+        // Get system status
+        const status = await fetchWithAuth('/status');
+        updateDashboardStatus(status);
 
-        // Show loading indicator
-        document.getElementById('refresh-btn').innerHTML = '<span class="loading-spinner"></span>';
+        // Get recent tasks
+        const tasks = await fetchWithAuth('/tasks');
+        updateRecentTasks(tasks);
 
-        // Get system status (always needed for dashboard)
-        const systemStatus = await fetchWithAuth('/status');
-        updateDashboardStatus(systemStatus);
+        // Get worker status
+        const workers = await fetchWithAuth('/workers');
+        updateWorkerStatus(workers);
 
-        // Load tasks if on dashboard or tasks section
-        if (activeSection === 'dashboard-section' || activeSection === 'tasks-section') {
-            const tasks = await fetchWithAuth('/tasks');
-            if (activeSection === 'dashboard-section') {
-                updateRecentTasks(tasks);
-            } else {
-                updateAllTasks(tasks);
-            }
+        // Update active downloads
+        await updateActiveDownloads();
+
+        // Update current section
+        if (currentSection === 'tasks') {
+            updateAllTasks(tasks);
+        } else if (currentSection === 'workers') {
+            updateAllWorkers(workers);
+        } else if (currentSection === 'settings') {
+            // Update task assignment strategy display
+            updateTaskAssignmentStrategy(status.config?.task_assignment?.strategy || 'least_loaded');
         }
 
-        // Load workers if on dashboard, workers section, or direct control section
-        if (activeSection === 'dashboard-section' ||
-            activeSection === 'workers-section' ||
-            activeSection === 'direct-control-section') {
-            const workers = await fetchWithAuth('/workers');
-            if (activeSection === 'dashboard-section') {
-                updateWorkerStatus(workers);
-            } else {
-                updateAllWorkers(workers);
-            }
-        }
-
-        // Update active downloads if on direct control section
-        if (activeSection === 'direct-control-section') {
-            await updateActiveDownloads();
-        }
-
+        // Hide loading indicator
+        document.getElementById('loading-indicator').style.display = 'none';
     } catch (error) {
         console.error('Error refreshing data:', error);
-    } finally {
-        // Hide loading indicator
-        document.getElementById('refresh-btn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
+        showToast('Error refreshing data', 'error');
     }
 }
 
@@ -351,6 +332,47 @@ function updateDashboardStatus(status) {
     document.getElementById('active-downloads-count').textContent = status.tasks_by_status.downloading || 0;
     document.getElementById('completed-count').textContent = status.tasks_by_status.completed || 0;
     document.getElementById('system-load').textContent = `${status.system_load.toFixed(1)}%`;
+    
+    // If we're on the settings page, update the task assignment strategy
+    if (currentSection === 'settings') {
+        updateTaskAssignmentStrategy(status.config?.task_assignment?.strategy || 'least_loaded');
+    }
+}
+
+// Update task assignment strategy display
+function updateTaskAssignmentStrategy(strategy) {
+    const strategyElement = document.getElementById('currentStrategy');
+    const descriptionElement = document.getElementById('strategyDescription');
+    
+    strategyElement.textContent = strategy;
+    
+    // Set description based on strategy
+    switch(strategy) {
+        case 'least_loaded':
+            descriptionElement.textContent = 'Assigns tasks to workers with the lowest load percentage';
+            break;
+        case 'round_robin':
+            descriptionElement.textContent = 'Assigns tasks in sequence, rotating through available workers';
+            break;
+        case 'random':
+            descriptionElement.textContent = 'Randomly selects a worker from available ones';
+            break;
+        case 'tags':
+            descriptionElement.textContent = 'Matches tasks and workers based on matching key-value tags';
+            break;
+        default:
+            descriptionElement.textContent = '';
+    }
+    
+    // Highlight the current strategy in the list
+    const listItems = document.querySelectorAll('.list-group-item');
+    listItems.forEach(item => {
+        if (item.textContent.includes(strategy)) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
 }
 
 // Update recent tasks table on dashboard
@@ -687,14 +709,38 @@ async function showTaskDetails(taskId) {
 
         // Add options if available
         if (task.options && Object.keys(task.options).length > 0) {
-            html += `
-                <div class="row">
-                    <div class="col-md-12">
-                        <p class="task-detail-label">Options:</p>
-                        <pre class="task-detail-value">${JSON.stringify(task.options, null, 2)}</pre>
+            // Extract tags for special display
+            const tags = task.options.tags || {};
+            const otherOptions = { ...task.options };
+            delete otherOptions.tags;
+            
+            // Display tags if they exist
+            if (Object.keys(tags).length > 0) {
+                html += `
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="task-detail-label">Tags:</p>
+                            <div class="task-detail-value">
+                                ${Object.entries(tags).map(([key, value]) => 
+                                    `<span class="badge bg-info me-1">${key}: ${value}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
+            
+            // Display other options
+            if (Object.keys(otherOptions).length > 0) {
+                html += `
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="task-detail-label">Options:</p>
+                            <pre class="task-detail-value">${JSON.stringify(otherOptions, null, 2)}</pre>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         // Add error message if available
@@ -741,10 +787,157 @@ async function showTaskDetails(taskId) {
     }
 }
 
-// Show worker details (placeholder for now)
-function showWorkerDetails(workerId) {
-    console.log(`Worker details for ${workerId} would be shown here`);
-    showToast(`Worker details for ${workerId} - Feature coming soon`);
+// Show worker details
+async function showWorkerDetails(workerId) {
+    try {
+        const worker = await fetchWithAuth(`/workers/${workerId}`);
+        
+        const modalContent = document.getElementById('workerDetailContent');
+        
+        // Format dates
+        const connectedDate = worker.connected_at ? new Date(worker.connected_at).toLocaleString() : 'N/A';
+        const lastHeartbeat = worker.last_heartbeat ? new Date(worker.last_heartbeat).toLocaleString() : 'N/A';
+        
+        // Build HTML content
+        let html = `
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="worker-detail-label">Worker ID:</p>
+                    <p class="worker-detail-value">${worker.id}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="worker-detail-label">Status:</p>
+                    <p class="worker-detail-value status-${worker.status.toLowerCase()}">${worker.status}</p>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="worker-detail-label">Hostname:</p>
+                    <p class="worker-detail-value">${worker.hostname}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="worker-detail-label">Address:</p>
+                    <p class="worker-detail-value">${worker.address}:${worker.port}</p>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="worker-detail-label">Connected At:</p>
+                    <p class="worker-detail-value">${connectedDate}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="worker-detail-label">Last Heartbeat:</p>
+                    <p class="worker-detail-value">${lastHeartbeat}</p>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="worker-detail-label">Slots:</p>
+                    <p class="worker-detail-value">${worker.used_slots} / ${worker.total_slots}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="worker-detail-label">Load:</p>
+                    <p class="worker-detail-value">${worker.load_percentage.toFixed(1)}%</p>
+                </div>
+            </div>
+        `;
+        
+        // Add tags if available
+        if (worker.capabilities && worker.capabilities.tags) {
+            const tags = worker.capabilities.tags;
+            html += `
+                <div class="row">
+                    <div class="col-md-12">
+                        <p class="worker-detail-label">Tags:</p>
+                        <div class="worker-detail-value">
+                            ${Object.entries(tags).map(([key, value]) => 
+                                `<span class="badge bg-info me-1">${key}: ${value}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Add other capabilities
+        if (worker.capabilities) {
+            const otherCapabilities = { ...worker.capabilities };
+            delete otherCapabilities.tags;
+            
+            if (Object.keys(otherCapabilities).length > 0) {
+                html += `
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="worker-detail-label">Capabilities:</p>
+                            <pre class="worker-detail-value">${JSON.stringify(otherCapabilities, null, 2)}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Add current tasks
+        if (worker.current_tasks && worker.current_tasks.length > 0) {
+            html += `
+                <div class="row">
+                    <div class="col-md-12">
+                        <p class="worker-detail-label">Current Tasks:</p>
+                        <ul class="worker-detail-value">
+                            ${worker.current_tasks.map(taskId => 
+                                `<li><a href="#" class="task-link" data-task-id="${taskId}">${taskId}</a></li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Add health metrics
+        if (worker.health_metrics) {
+            html += `
+                <div class="row">
+                    <div class="col-md-12">
+                        <p class="worker-detail-label">Health Metrics:</p>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p>CPU: ${worker.health_metrics.cpu_usage.toFixed(1)}%</p>
+                            </div>
+                            <div class="col-md-4">
+                                <p>Memory: ${worker.health_metrics.memory_usage.toFixed(1)}%</p>
+                            </div>
+                            <div class="col-md-4">
+                                <p>Disk: ${worker.health_metrics.disk_usage.toFixed(1)}%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        modalContent.innerHTML = html;
+        
+        // Add event listeners to task links
+        const taskLinks = modalContent.querySelectorAll('.task-link');
+        taskLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const taskId = link.getAttribute('data-task-id');
+                // Close this modal
+                const workerModal = bootstrap.Modal.getInstance(document.getElementById('workerDetailModal'));
+                workerModal.hide();
+                // Show task details
+                showTaskDetails(taskId);
+            });
+        });
+        
+        // Show the modal
+        const workerDetailModal = new bootstrap.Modal(document.getElementById('workerDetailModal'));
+        workerDetailModal.show();
+        
+    } catch (error) {
+        console.error('Error fetching worker details:', error);
+        showToast('Error fetching worker details', 'error');
+    }
 }
 
 // Create a new task
@@ -752,6 +945,8 @@ async function createNewTask() {
     const url = document.getElementById('taskUrl').value.trim();
     const filename = document.getElementById('outputFilename').value.trim();
     const maxConnections = parseInt(document.getElementById('maxConnections').value, 10);
+    const tagsInput = document.getElementById('taskTags').value.trim();
+    const priority = parseInt(document.getElementById('taskPriority').value, 10);
 
     if (!url) {
         showToast('URL is required', 'error');
@@ -765,6 +960,20 @@ async function createNewTask() {
     }
 
     options['max-connection-per-server'] = maxConnections;
+    
+    // Add priority
+    options.priority = priority;
+    
+    // Parse and add tags if provided
+    if (tagsInput) {
+        try {
+            const tags = JSON.parse(tagsInput);
+            options.tags = tags;
+        } catch (e) {
+            showToast('Invalid JSON format for tags', 'error');
+            return;
+        }
+    }
 
     try {
         const newTask = await fetchWithAuth('/tasks', {

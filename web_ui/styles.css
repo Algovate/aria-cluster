@@ -156,6 +156,16 @@ body {
     margin-bottom: 1rem;
 }
 
+/* Worker detail formatting */
+.worker-detail-label {
+    font-weight: bold;
+    margin-bottom: 0;
+}
+
+.worker-detail-value {
+    margin-bottom: 1rem;
+}
+
 /* Tooltips */
 .tooltip-inner {
     max-width: 300px;
