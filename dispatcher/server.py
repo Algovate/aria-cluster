@@ -7,6 +7,7 @@ import logging
 import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect, status
@@ -26,22 +27,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Create FastAPI app
-app = FastAPI(
-    title="Aria2c Cluster Dispatcher",
-    description="API server for the aria2c cluster task dispatcher",
-    version="1.0.0"
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Global state
 config_path = os.environ.get("CONFIG_PATH", "config/dispatcher.json")
@@ -70,22 +55,36 @@ async def verify_api_key(x_api_key: Optional[str] = Header(None)):
     return True
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the server on startup."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    # Startup
     logger.info("Starting aria2c cluster dispatcher")
-
-    # Start the scheduler
     await scheduler.start()
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up on shutdown."""
+    # Shutdown
     logger.info("Shutting down aria2c cluster dispatcher")
-
-    # Stop the scheduler
     await scheduler.stop()
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="Aria2c Cluster Dispatcher",
+    description="API server for the aria2c cluster task dispatcher",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Task endpoints
