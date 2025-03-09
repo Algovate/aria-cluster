@@ -26,9 +26,9 @@ async def main():
                         help='Path to SQLite database file (default: data/dispatcher.db)')
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Enable verbose logging')
-    
+
     args = parser.parse_args()
-    
+
     # Configure logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
@@ -36,34 +36,34 @@ async def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     logger = logging.getLogger(__name__)
-    
+
     # Validate arguments
     if args.source == args.target:
         logger.error("Source and target database types must be different")
         return 1
-    
+
     # Create database instances
     source_db = get_database(
-        args.source, 
+        args.source,
         args.sqlite_path if args.source == 'sqlite' else None
     )
     target_db = get_database(
         args.target,
         args.sqlite_path if args.target == 'sqlite' else None
     )
-    
+
     # Perform migration
     try:
         if args.source == 'memory' and args.target == 'sqlite':
             stats = await migrate_memory_to_sqlite(source_db, target_db)
         else:
             stats = await migrate_sqlite_to_memory(source_db, target_db)
-        
+
         logger.info(f"Migration completed successfully:")
         logger.info(f"  - Tasks migrated: {stats['tasks_migrated']}")
         logger.info(f"  - Workers migrated: {stats['workers_migrated']}")
         logger.info(f"  - Errors: {stats['errors']}")
-        
+
         return 0
     except Exception as e:
         logger.error(f"Migration failed: {str(e)}")
@@ -72,4 +72,4 @@ async def main():
 
 if __name__ == "__main__":
     exit_code = asyncio.run(main())
-    sys.exit(exit_code) 
+    sys.exit(exit_code)

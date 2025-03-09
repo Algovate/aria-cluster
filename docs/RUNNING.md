@@ -14,6 +14,7 @@ This guide provides detailed instructions for running the aria2c cluster task di
 - Or:
   - Python 3.8 or higher
   - aria2c installed on each worker machine
+  - Required Python packages (see requirements.txt)
 
 ## Docker Compose Setup (Recommended)
 
@@ -54,16 +55,64 @@ pip install -r requirements.txt
    {
      "host": "0.0.0.0",
      "port": 8000,
-     "worker_timeout": 30
+     "log_level": "info",
+     "database": {
+       "type": "memory",
+       "path": "data/dispatcher.db"
+     },
+     "task_assignment": {
+       "strategy": "least_loaded",
+       "max_retries": 3,
+       "retry_delay": 300
+     },
+     "worker_management": {
+       "heartbeat_interval": 30,
+       "heartbeat_timeout": 90,
+       "auto_remove_offline": true,
+       "offline_threshold": 300
+     },
+     "security": {
+       "api_key_required": true,
+       "api_keys": ["default-api-key-change-me"]
+     }
    }
    ```
 
 2. Worker configuration (`config/worker.json`):
    ```json
    {
-     "dispatcher_url": "http://localhost:8000",
-     "download_dir": "./downloads",
-     "max_concurrent_downloads": 3
+     "dispatcher": {
+       "url": "http://localhost:8000",
+       "heartbeat_interval": 30,
+       "api_key": "default-api-key-change-me"
+     },
+     "aria2": {
+       "host": "0.0.0.0",
+       "port": 6800,
+       "rpc_secret": "",
+       "rpc_path": "/jsonrpc",
+       "download_dir": "downloads",
+       "global_options": {
+         "max-concurrent-downloads": 5,
+         "max-connection-per-server": 16,
+         "split": 8,
+         "min-split-size": "1M",
+         "continue": true,
+         "max-overall-download-limit": "0",
+         "max-overall-upload-limit": "0"
+       }
+     },
+     "worker": {
+       "name": "worker-1",
+       "max_tasks": 5,
+       "capabilities": {
+         "disk_space": "100G",
+         "bandwidth": "100M",
+         "supports_bt": true,
+         "supports_metalink": true
+       }
+     },
+     "log_level": "info"
    }
    ```
 
@@ -93,16 +142,52 @@ pip install -r requirements.txt
   - Worker 1: `./downloads/worker1`
   - Worker 2: `./downloads/worker2`
 
+## API Authentication
+
+The API requires authentication using an API key. You can:
+
+1. Include the API key in the request header:
+   ```
+   X-API-Key: your-api-key-here
+   ```
+
+2. Or include it as a query parameter:
+   ```
+   http://localhost:8000/api/status?api_key=your-api-key-here
+   ```
+
+The default API key is set in the dispatcher configuration file.
+
+## Database Configuration
+
+The system supports two database backends:
+
+1. In-memory database (default):
+   - Fast but data is lost on restart
+   - No configuration needed
+
+2. SQLite database:
+   - Persistent storage across restarts
+   - Configure in `config/dispatcher.json`:
+     ```json
+     "database": {
+       "type": "sqlite",
+       "path": "data/dispatcher.db"
+     }
+     ```
+
+See [Database Configuration](database.md) for more details.
+
 ## Health Checks
 
 1. Check system status:
    ```bash
-   curl http://localhost:8000/status
+   curl -H "X-API-Key: default-api-key-change-me" http://localhost:8000/api/status
    ```
 
 2. List workers:
    ```bash
-   curl http://localhost:8000/workers
+   curl -H "X-API-Key: default-api-key-change-me" http://localhost:8000/api/workers
    ```
 
 3. Monitor logs:
@@ -121,6 +206,7 @@ pip install -r requirements.txt
    - Check if dispatcher is running
    - Verify dispatcher URL in worker config
    - Check network connectivity
+   - Verify API key matches between worker and dispatcher
 
 2. If downloads fail:
    - Verify aria2c installation
@@ -131,5 +217,6 @@ pip install -r requirements.txt
    - Verify dispatcher URL configuration
    - Check CORS settings if needed
    - Clear browser cache
+   - Verify API key configuration
 
-For more details about using the system, see [README.md](README.md) and the [Web UI Guide](web_ui/README.md). 
+For more details about using the system, see [README.md](../README.md) and the [Web UI Guide](../web_ui/README.md). 

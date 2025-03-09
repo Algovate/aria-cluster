@@ -12,6 +12,8 @@ A distributed system for managing and dispatching download tasks across multiple
 - Fault tolerance and task recovery
 - Real-time status monitoring
 - Tag-based worker assignment for task categorization
+- Multiple database backends (in-memory and SQLite)
+- API key authentication for security
 
 ### Web Interface
 
@@ -30,7 +32,9 @@ aria_cluster/
 ├── web_ui/           # Web interface
 ├── common/           # Shared code and utilities
 ├── config/           # Configuration files
-└── scripts/          # Utility scripts
+├── scripts/          # Utility scripts
+├── data/             # Database and persistent data
+└── downloads/        # Download directories for workers
 ```
 
 ## Quick Start
@@ -57,6 +61,7 @@ open http://localhost:8080
 - [Running Guide](docs/RUNNING.md) - Detailed instructions for running the system
 - [Web UI Guide](web_ui/README.md) - Web interface documentation
 - [Worker Tagging](docs/tagging.md) - Guide to using tag-based worker assignment
+- [Database Configuration](docs/database.md) - Database options and migration
 - API Documentation (see below)
 
 ## Setup
@@ -82,14 +87,15 @@ open http://localhost:8080
 
 ## API Documentation
 
-The dispatcher provides a RESTful API:
+The dispatcher provides a RESTful API (requires API key authentication):
 
-- `GET /status` - System status
-- `GET /tasks` - List all tasks
-- `POST /tasks` - Create new task
-- `GET /tasks/{task_id}` - Task details
-- `DELETE /tasks/{task_id}` - Cancel task
-- `GET /workers` - List workers
+- `GET /api/status` - System status
+- `GET /api/tasks` - List all tasks
+- `POST /api/tasks` - Create new task
+- `GET /api/tasks/{task_id}` - Task details
+- `DELETE /api/tasks/{task_id}` - Cancel task
+- `GET /api/workers` - List workers
+- `GET /api/workers/{worker_id}` - Worker details
 
 ## Command Line Interface
 
@@ -121,13 +127,25 @@ Monitor the system through:
 2. API Endpoint:
 
    ```
-   http://localhost:8000/status
+   http://localhost:8000/api/status
    ```
 3. Docker logs:
 
    ```bash
    docker-compose logs -f
    ```
+
+## Database Migration
+
+To migrate between database types:
+
+```bash
+# Migrate from memory to SQLite
+python scripts/migrate_database.py --source memory --target sqlite
+
+# Migrate from SQLite to memory
+python scripts/migrate_database.py --source sqlite --target memory
+```
 
 ## License
 
