@@ -11,6 +11,7 @@ let config = {
 // Global variables
 let refreshTimerId = null;
 let currentTaskId = null;
+let currentSection = 'dashboard'; // Track which section is currently active
 let lastRefreshTime = 0;
 let workerRpcPorts = new Map(); // Map of worker IDs to their RPC ports
 
@@ -81,7 +82,7 @@ function setupEventListeners() {
     });
 
     // RPC Method change handler
-    document.getElementById('rpcMethod').addEventListener('change', function() {
+    document.getElementById('rpcMethod').addEventListener('change', function () {
         const customMethodContainer = document.getElementById('customMethodContainer');
         customMethodContainer.style.display = this.value === 'custom' ? 'block' : 'none';
     });
@@ -89,6 +90,9 @@ function setupEventListeners() {
 
 // Function to switch active section
 function switchSection(sectionName) {
+    // Update current section tracking
+    currentSection = sectionName;
+
     // Hide all sections
     document.querySelectorAll('.content-section').forEach(section => {
         section.classList.remove('active-section');
@@ -332,7 +336,7 @@ function updateDashboardStatus(status) {
     document.getElementById('active-downloads-count').textContent = status.tasks_by_status.downloading || 0;
     document.getElementById('completed-count').textContent = status.tasks_by_status.completed || 0;
     document.getElementById('system-load').textContent = `${status.system_load.toFixed(1)}%`;
-    
+
     // If we're on the settings page, update the task assignment strategy
     if (currentSection === 'settings') {
         updateTaskAssignmentStrategy(status.config?.task_assignment?.strategy || 'least_loaded');
@@ -343,11 +347,11 @@ function updateDashboardStatus(status) {
 function updateTaskAssignmentStrategy(strategy) {
     const strategyElement = document.getElementById('currentStrategy');
     const descriptionElement = document.getElementById('strategyDescription');
-    
+
     strategyElement.textContent = strategy;
-    
+
     // Set description based on strategy
-    switch(strategy) {
+    switch (strategy) {
         case 'least_loaded':
             descriptionElement.textContent = 'Assigns tasks to workers with the lowest load percentage';
             break;
@@ -363,7 +367,7 @@ function updateTaskAssignmentStrategy(strategy) {
         default:
             descriptionElement.textContent = '';
     }
-    
+
     // Highlight the current strategy in the list
     const listItems = document.querySelectorAll('.list-group-item');
     listItems.forEach(item => {
@@ -627,7 +631,7 @@ function filterTasks() {
         const taskUrl = row.getAttribute('data-task-url') || '';
 
         const matchesSearch = taskId.toLowerCase().includes(searchValue) ||
-                             taskUrl.toLowerCase().includes(searchValue);
+            taskUrl.toLowerCase().includes(searchValue);
 
         const matchesStatus = statusFilter === 'all' || taskStatus === statusFilter;
 
@@ -713,7 +717,7 @@ async function showTaskDetails(taskId) {
             const tags = task.options.tags || {};
             const otherOptions = { ...task.options };
             delete otherOptions.tags;
-            
+
             // Display tags if they exist
             if (Object.keys(tags).length > 0) {
                 html += `
@@ -721,15 +725,15 @@ async function showTaskDetails(taskId) {
                         <div class="col-md-12">
                             <p class="task-detail-label">Tags:</p>
                             <div class="task-detail-value">
-                                ${Object.entries(tags).map(([key, value]) => 
-                                    `<span class="badge bg-info me-1">${key}: ${value}</span>`
-                                ).join('')}
+                                ${Object.entries(tags).map(([key, value]) =>
+                    `<span class="badge bg-info me-1">${key}: ${value}</span>`
+                ).join('')}
                             </div>
                         </div>
                     </div>
                 `;
             }
-            
+
             // Display other options
             if (Object.keys(otherOptions).length > 0) {
                 html += `
@@ -791,13 +795,13 @@ async function showTaskDetails(taskId) {
 async function showWorkerDetails(workerId) {
     try {
         const worker = await fetchWithAuth(`/workers/${workerId}`);
-        
+
         const modalContent = document.getElementById('workerDetailContent');
-        
+
         // Format dates
         const connectedDate = worker.connected_at ? new Date(worker.connected_at).toLocaleString() : 'N/A';
         const lastHeartbeat = worker.last_heartbeat ? new Date(worker.last_heartbeat).toLocaleString() : 'N/A';
-        
+
         // Build HTML content
         let html = `
             <div class="row">
@@ -841,7 +845,7 @@ async function showWorkerDetails(workerId) {
                 </div>
             </div>
         `;
-        
+
         // Add tags if available
         if (worker.capabilities && worker.capabilities.tags) {
             const tags = worker.capabilities.tags;
@@ -850,20 +854,20 @@ async function showWorkerDetails(workerId) {
                     <div class="col-md-12">
                         <p class="worker-detail-label">Tags:</p>
                         <div class="worker-detail-value">
-                            ${Object.entries(tags).map(([key, value]) => 
-                                `<span class="badge bg-info me-1">${key}: ${value}</span>`
-                            ).join('')}
+                            ${Object.entries(tags).map(([key, value]) =>
+                `<span class="badge bg-info me-1">${key}: ${value}</span>`
+            ).join('')}
                         </div>
                     </div>
                 </div>
             `;
         }
-        
+
         // Add other capabilities
         if (worker.capabilities) {
             const otherCapabilities = { ...worker.capabilities };
             delete otherCapabilities.tags;
-            
+
             if (Object.keys(otherCapabilities).length > 0) {
                 html += `
                     <div class="row">
@@ -875,7 +879,7 @@ async function showWorkerDetails(workerId) {
                 `;
             }
         }
-        
+
         // Add current tasks
         if (worker.current_tasks && worker.current_tasks.length > 0) {
             html += `
@@ -883,15 +887,15 @@ async function showWorkerDetails(workerId) {
                     <div class="col-md-12">
                         <p class="worker-detail-label">Current Tasks:</p>
                         <ul class="worker-detail-value">
-                            ${worker.current_tasks.map(taskId => 
-                                `<li><a href="#" class="task-link" data-task-id="${taskId}">${taskId}</a></li>`
-                            ).join('')}
+                            ${worker.current_tasks.map(taskId =>
+                `<li><a href="#" class="task-link" data-task-id="${taskId}">${taskId}</a></li>`
+            ).join('')}
                         </ul>
                     </div>
                 </div>
             `;
         }
-        
+
         // Add health metrics
         if (worker.health_metrics) {
             html += `
@@ -913,9 +917,9 @@ async function showWorkerDetails(workerId) {
                 </div>
             `;
         }
-        
+
         modalContent.innerHTML = html;
-        
+
         // Add event listeners to task links
         const taskLinks = modalContent.querySelectorAll('.task-link');
         taskLinks.forEach(link => {
@@ -929,11 +933,11 @@ async function showWorkerDetails(workerId) {
                 showTaskDetails(taskId);
             });
         });
-        
+
         // Show the modal
         const workerDetailModal = new bootstrap.Modal(document.getElementById('workerDetailModal'));
         workerDetailModal.show();
-        
+
     } catch (error) {
         console.error('Error fetching worker details:', error);
         showToast('Error fetching worker details', 'error');
@@ -960,10 +964,10 @@ async function createNewTask() {
     }
 
     options['max-connection-per-server'] = maxConnections;
-    
+
     // Add priority
     options.priority = priority;
-    
+
     // Parse and add tags if provided
     if (tagsInput) {
         try {

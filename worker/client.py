@@ -71,12 +71,24 @@ class WorkerClient:
         self.total_bytes_downloaded = 0
         self.peak_download_speed = 0
         self.download_speeds: List[int] = []
+        
+        # CPU usage tracking (non-blocking)
+        self._cpu_samples: List[float] = []
+        self._last_cpu_call = 0.0
+        # Initialize CPU monitoring (first call returns 0, subsequent calls are instant)
+        psutil.cpu_percent(interval=None)
 
     async def collect_system_metrics(self) -> HealthMetrics:
         """Collect system health metrics."""
         try:
-            # Get CPU usage
-            cpu_usage = psutil.cpu_percent(interval=1)
+            # Get CPU usage (non-blocking, returns value since last call)
+            # Use interval=None for instant return, track samples for averaging
+            current_cpu = psutil.cpu_percent(interval=None)
+            self._cpu_samples.append(current_cpu)
+            # Keep last 10 samples for averaging
+            if len(self._cpu_samples) > 10:
+                self._cpu_samples.pop(0)
+            cpu_usage = sum(self._cpu_samples) / len(self._cpu_samples)
 
             # Get memory usage
             memory = psutil.virtual_memory()
@@ -95,7 +107,7 @@ class WorkerClient:
             uptime = int(time.time() - self.start_time)
 
             return {
-                "cpu_usage": cpu_usage,
+                "cpu_usage": round(cpu_usage, 1),
                 "memory_usage": memory_usage,
                 "disk_usage": disk_usage,
                 "network_rx": network_rx,
@@ -221,12 +233,18 @@ class WorkerClient:
 
     async def connect_to_dispatcher(self):
         """Connect to the dispatcher via WebSocket and maintain the connection."""
+        # Exponential backoff settings
+        base_delay = 1  # Start with 1 second
+        max_delay = 60  # Cap at 60 seconds
+        current_delay = base_delay
+        
         while self.running:
             try:
                 if not self.worker_id:
                     registered = await self.register_with_dispatcher()
                     if not registered:
-                        await asyncio.sleep(10)
+                        await asyncio.sleep(current_delay)
+                        current_delay = min(current_delay * 2, max_delay)
                         continue
 
                 ws_url = f"{self.dispatcher_url.replace('http', 'ws')}/ws/worker/{self.worker_id}"
@@ -237,6 +255,9 @@ class WorkerClient:
                 async with ws_connect(ws_url) as websocket:
                     self.ws = websocket
                     logger.info("Connected to dispatcher WebSocket")
+                    
+                    # Reset backoff on successful connection
+                    current_delay = base_delay
 
                     # Send initial heartbeat
                     await self.send_heartbeat()
@@ -257,14 +278,16 @@ class WorkerClient:
                             pass
 
             except ConnectionClosed:
-                logger.warning("WebSocket connection closed, reconnecting...")
+                logger.warning(f"WebSocket connection closed, reconnecting in {current_delay}s...")
                 self.ws = None
-                await asyncio.sleep(5)
+                await asyncio.sleep(current_delay)
+                current_delay = min(current_delay * 2, max_delay)
 
             except Exception as e:
-                logger.error(f"WebSocket error: {str(e)}")
+                logger.error(f"WebSocket error: {str(e)}, reconnecting in {current_delay}s...")
                 self.ws = None
-                await asyncio.sleep(10)
+                await asyncio.sleep(current_delay)
+                current_delay = min(current_delay * 2, max_delay)
 
     async def heartbeat_loop(self):
         """Send periodic heartbeats to the dispatcher."""

@@ -87,8 +87,9 @@ class TaskScheduler:
 
         logger.info(f"Processing {len(pending_tasks)} pending tasks with {len(available_workers)} available workers")
 
-        # Sort tasks by creation time (oldest first)
-        pending_tasks.sort(key=lambda t: t.created_at)
+        # Sort tasks by priority (highest first) then by creation time (oldest first)
+        # Priority enum: LOW=1, NORMAL=2, HIGH=3, URGENT=4
+        pending_tasks.sort(key=lambda t: (-t.priority.value, t.created_at))
 
         # Assign tasks to workers
         for task in pending_tasks:
@@ -222,8 +223,8 @@ class TaskScheduler:
         now = datetime.now()
 
         for task in failed_tasks:
-            # Skip if no retry is needed
-            if not task.options.get("retry_count", 0) < self.max_retries:
+            # Skip if max retries already exceeded
+            if task.options.get("retry_count", 0) >= self.max_retries:
                 continue
 
             # Check if retry delay has passed
