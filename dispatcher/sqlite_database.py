@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import os
 
-from common.models import Task, Worker, TaskStatus, WorkerStatus
+from common.models import Task, Worker, TaskStatus, WorkerStatus, TaskPriority
 from common.utils import generate_id
 from dispatcher.database_interface import DatabaseInterface
 
@@ -91,7 +91,7 @@ class SQLiteDatabase(DatabaseInterface):
             created_at=datetime.fromisoformat(row['created_at']),
             updated_at=datetime.fromisoformat(row['updated_at']),
             status=TaskStatus(row['status']),
-            priority=int(row['priority']),
+            priority=TaskPriority(int(row['priority'])),
             worker_id=row['worker_id'],
             aria2_gid=row['aria2_gid'],
             options=options,
@@ -148,7 +148,12 @@ class SQLiteDatabase(DatabaseInterface):
         )
 
     # Task methods
-    async def create_task(self, url: str, options: Dict[str, Any] = None) -> Task:
+    async def create_task(
+        self, 
+        url: str, 
+        options: Dict[str, Any] = None,
+        priority: TaskPriority = TaskPriority.NORMAL
+    ) -> Task:
         """Create a new task."""
         if options is None:
             options = {}
@@ -166,13 +171,13 @@ class SQLiteDatabase(DatabaseInterface):
                 ''',
                 (
                     task_id, url, now, now, TaskStatus.PENDING.value,
-                    2,  # Normal priority
+                    priority.value,
                     json.dumps(options), 0.0
                 )
             )
             await db.commit()
 
-        logger.info(f"Created task {task_id} for URL {url}")
+        logger.info(f"Created task {task_id} for URL {url} with priority {priority.name}")
 
         task = Task(
             id=task_id,
@@ -180,6 +185,7 @@ class SQLiteDatabase(DatabaseInterface):
             created_at=datetime.fromisoformat(now),
             updated_at=datetime.fromisoformat(now),
             status=TaskStatus.PENDING,
+            priority=priority,
             options=options,
             progress=0.0
         )
@@ -256,6 +262,9 @@ class SQLiteDatabase(DatabaseInterface):
                 elif key == 'status':
                     update_fields.append(f"{key} = ?")
                     update_values.append(value.value)
+                elif key == 'priority':
+                    update_fields.append(f"{key} = ?")
+                    update_values.append(value.value if hasattr(value, 'value') else value)
                 else:
                     update_fields.append(f"{key} = ?")
                     update_values.append(value)

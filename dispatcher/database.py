@@ -5,7 +5,7 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from common.models import Task, Worker, TaskStatus, WorkerStatus
+from common.models import Task, Worker, TaskStatus, WorkerStatus, TaskPriority
 from common.utils import generate_id
 from dispatcher.database_interface import DatabaseInterface
 
@@ -21,7 +21,12 @@ class MemoryDatabase(DatabaseInterface):
         self.workers: Dict[str, Worker] = {}
 
     # Task methods
-    async def create_task(self, url: str, options: Dict[str, Any] = None) -> Task:
+    async def create_task(
+        self, 
+        url: str, 
+        options: Dict[str, Any] = None,
+        priority: TaskPriority = TaskPriority.NORMAL
+    ) -> Task:
         """Create a new task."""
         if options is None:
             options = {}
@@ -31,10 +36,11 @@ class MemoryDatabase(DatabaseInterface):
             id=task_id,
             url=url,
             options=options,
-            status=TaskStatus.PENDING
+            status=TaskStatus.PENDING,
+            priority=priority
         )
         self.tasks[task_id] = task
-        logger.info(f"Created task {task_id} for URL {url}")
+        logger.info(f"Created task {task_id} for URL {url} with priority {priority.name}")
         return task
 
     async def get_task(self, task_id: str) -> Optional[Task]:

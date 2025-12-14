@@ -599,14 +599,19 @@ class WorkerClient:
 
         # Map aria2c status to our status
         task_status = task["status"]
-        if aria2_status == "downloading":
-            task_status = TaskStatus.DOWNLOADING
-        elif aria2_status == "completed":
-            task_status = TaskStatus.COMPLETED
-        elif aria2_status == "failed":
-            task_status = TaskStatus.FAILED
-        elif aria2_status == "canceled":
-            task_status = TaskStatus.CANCELED
+        status_map = {
+            "downloading": TaskStatus.DOWNLOADING,
+            "completed": TaskStatus.COMPLETED,
+            "failed": TaskStatus.FAILED,
+            "canceled": TaskStatus.CANCELED,
+            "queued": TaskStatus.QUEUED,
+            "paused": TaskStatus.QUEUED  # Paused tasks are treated as queued
+        }
+        
+        if aria2_status in status_map:
+            task_status = status_map[aria2_status]
+        elif aria2_status != "unknown":
+            logger.warning(f"Unknown aria2c status '{aria2_status}' for task {task_id}, keeping current status")
 
         # Check if status has changed
         status_changed = task["status"] != task_status

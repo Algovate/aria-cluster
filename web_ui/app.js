@@ -965,9 +965,6 @@ async function createNewTask() {
 
     options['max-connection-per-server'] = maxConnections;
 
-    // Add priority
-    options.priority = priority;
-
     // Parse and add tags if provided
     if (tagsInput) {
         try {
@@ -984,6 +981,7 @@ async function createNewTask() {
             method: 'POST',
             body: JSON.stringify({
                 url: url,
+                priority: priority,  // Priority as top-level field, not in options
                 options: options
             })
         });

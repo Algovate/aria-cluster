@@ -107,7 +107,7 @@ def parse_aria2_status(status_info: Dict[str, Any]) -> Dict[str, Any]:
         "files": []
     }
 
-    # Extract status
+    # Extract status with mapping from aria2c statuses to our statuses
     if "status" in status_info:
         status_map = {
             "active": "downloading",
@@ -117,7 +117,12 @@ def parse_aria2_status(status_info: Dict[str, Any]) -> Dict[str, Any]:
             "complete": "completed",
             "removed": "canceled"
         }
-        result["status"] = status_map.get(status_info["status"], status_info["status"])
+        aria2_status = status_info["status"]
+        result["status"] = status_map.get(aria2_status, aria2_status)
+        
+        # Log warning for unknown statuses
+        if aria2_status not in status_map:
+            logger.warning(f"Unknown aria2c status '{aria2_status}', using as-is")
 
     # Extract progress
     if "totalLength" in status_info and "completedLength" in status_info:
@@ -153,6 +158,24 @@ def parse_aria2_status(status_info: Dict[str, Any]) -> Dict[str, Any]:
             result["files"].append(file_data)
 
     return result
+
+
+def validate_url(url: str) -> bool:
+    """
+    Validate that a string is a valid URL.
+
+    Args:
+        url: The URL string to validate
+
+    Returns:
+        True if the URL is valid, False otherwise
+    """
+    from urllib.parse import urlparse
+    try:
+        result = urlparse(url)
+        return bool(result.scheme and result.netloc)
+    except Exception:
+        return False
 
 
 def load_config(config_path: str) -> Dict[str, Any]:

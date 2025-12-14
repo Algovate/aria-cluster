@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from common.models import Task, Worker, TaskStatus, WorkerStatus
+from common.models import Task, Worker, TaskStatus, WorkerStatus, TaskPriority
 
 
 class DatabaseInterface(ABC):
@@ -13,7 +13,12 @@ class DatabaseInterface(ABC):
 
     # Task methods
     @abstractmethod
-    async def create_task(self, url: str, options: Dict[str, Any] = None) -> Task:
+    async def create_task(
+        self, 
+        url: str, 
+        options: Dict[str, Any] = None,
+        priority: TaskPriority = TaskPriority.NORMAL
+    ) -> Task:
         """Create a new task."""
         pass
 

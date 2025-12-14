@@ -17,9 +17,10 @@ from common.models import (
     Task, Worker, TaskStatus, WorkerStatus,
     TaskCreate, TaskUpdate, WorkerCreate, WorkerUpdate, SystemStatus
 )
-from common.utils import load_config, generate_id
+from common.utils import load_config, generate_id, validate_url
 from dispatcher.database_factory import get_database, DatabaseType
 from dispatcher.scheduler import TaskScheduler
+from dispatcher.utils import extract_task_update_fields, extract_worker_update_fields, is_final_task_status
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +50,12 @@ async def verify_api_key(x_api_key: Optional[str] = Header(None)):
 
     api_keys = config.get("security", {}).get("api_keys", [])
     if not api_keys:
+        # If API key is required but no keys are configured, log a warning
+        # but allow access (configuration might be in progress)
+        logger.warning(
+            "API key authentication is required but no API keys are configured. "
+            "All requests will be allowed. Configure 'security.api_keys' in your config."
+        )
         return True
 
     if not x_api_key or x_api_key not in api_keys:
@@ -82,10 +89,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
+# Add CORS middleware (configurable via config file)
+cors_origins = config.get("cors", {}).get("allowed_origins", ["http://localhost:8080"])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -96,7 +104,15 @@ app.add_middleware(
 @app.post("/tasks", response_model=Task, dependencies=[Depends(verify_api_key)])
 async def create_task(task_data: TaskCreate):
     """Create a new download task."""
-    task = await database.create_task(task_data.url, task_data.options)
+    # Validate URL format
+    if not validate_url(task_data.url):
+        raise HTTPException(status_code=400, detail="Invalid URL format")
+    
+    task = await database.create_task(
+        task_data.url, 
+        task_data.options,
+        task_data.priority
+    )
     return task
 
 
@@ -118,8 +134,8 @@ async def get_task(task_id: str):
 @app.put("/tasks/{task_id}", response_model=Task, dependencies=[Depends(verify_api_key)])
 async def update_task(task_id: str, task_data: TaskUpdate):
     """Update a task."""
-    # Convert the model to a dict and remove None values
-    update_data = {k: v for k, v in task_data.dict().items() if v is not None}
+    # Convert the model to a dict and remove None values (Pydantic v2 compatible)
+    update_data = {k: v for k, v in task_data.model_dump().items() if v is not None}
 
     task = await database.update_task(task_id, **update_data)
     if not task:
@@ -219,7 +235,8 @@ async def delete_worker(worker_id: str):
     return {"message": f"Worker {worker_id} deleted"}
 
 
-# System status endpoint
+# System status endpoint (support both /api/status and /status for backward compatibility)
+@app.get("/api/status", response_model=SystemStatus, dependencies=[Depends(verify_api_key)])
 @app.get("/status", response_model=SystemStatus, dependencies=[Depends(verify_api_key)])
 async def get_system_status():
     """Get system status information."""
@@ -263,7 +280,7 @@ async def worker_websocket(websocket: WebSocket, worker_id: str):
         if worker_tasks:
             await websocket.send_text(json.dumps({
                 "action": "initial_tasks",
-                "tasks": [task.dict() for task in worker_tasks]
+                "tasks": [task.model_dump() for task in worker_tasks]
             }))
 
         # Handle messages
@@ -294,15 +311,30 @@ async def handle_worker_message(worker_id: str, message: str):
             # Update worker heartbeat
             await database.update_worker_heartbeat(worker_id)
 
+            # Prepare update data
+            update_data = {}
+
             # Update worker status if provided
             if "status" in data:
                 status_str = data["status"]
                 if status_str in [s.value for s in WorkerStatus]:
-                    await database.update_worker(worker_id, status=WorkerStatus(status_str))
+                    update_data["status"] = WorkerStatus(status_str)
 
             # Update worker slots if provided
             if "used_slots" in data:
-                await database.update_worker(worker_id, used_slots=data["used_slots"])
+                update_data["used_slots"] = data["used_slots"]
+
+            # Update health metrics if provided
+            if "health_metrics" in data:
+                update_data["health_metrics"] = data["health_metrics"]
+
+            # Update performance stats if provided
+            if "performance_stats" in data:
+                update_data["performance_stats"] = data["performance_stats"]
+
+            # Apply all updates at once
+            if update_data:
+                await database.update_worker(worker_id, **update_data)
 
         elif action == "task_update":
             # Update task status
@@ -317,27 +349,21 @@ async def handle_worker_message(worker_id: str, message: str):
                 return
 
             # Extract update data
-            update_data = {}
-            for field in ["status", "progress", "download_speed", "aria2_gid", "error_message", "result"]:
-                if field in data:
-                    update_data[field] = data[field]
+            allowed_task_fields = ["status", "progress", "download_speed", "aria2_gid", "error_message", "result"]
+            update_data = extract_task_update_fields(data, allowed_task_fields)
 
             # Update the task
             await database.update_task(task_id, **update_data)
 
             # Handle task completion or failure
-            if "status" in data:
-                status_str = data["status"]
-                if status_str in [TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELED.value]:
-                    # Unassign the task from the worker
-                    await database.unassign_task_from_worker(task_id)
+            if "status" in data and is_final_task_status(data["status"]):
+                # Unassign the task from the worker
+                await database.unassign_task_from_worker(task_id)
 
         elif action == "worker_update":
             # Update worker information
-            update_data = {}
-            for field in ["capabilities", "total_slots", "used_slots"]:
-                if field in data:
-                    update_data[field] = data[field]
+            allowed_worker_fields = ["capabilities", "total_slots", "used_slots"]
+            update_data = extract_worker_update_fields(data, allowed_worker_fields)
 
             if update_data:
                 await database.update_worker(worker_id, **update_data)

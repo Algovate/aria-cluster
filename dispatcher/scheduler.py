@@ -38,6 +38,7 @@ class TaskScheduler:
         self.worker_heartbeat_timeout = config.get("worker_management", {}).get("heartbeat_timeout", 90)
         self.auto_remove_offline = config.get("worker_management", {}).get("auto_remove_offline", True)
         self.offline_threshold = config.get("worker_management", {}).get("offline_threshold", 300)
+        self.scheduling_interval = config.get("task_assignment", {}).get("scheduling_interval", 5)
 
     async def start(self):
         """Start the scheduler."""
@@ -69,8 +70,8 @@ class TaskScheduler:
             except Exception as e:
                 logger.error(f"Error in task scheduling: {str(e)}")
 
-            # Wait before next scheduling round
-            await asyncio.sleep(5)
+            # Wait before next scheduling round (configurable interval)
+            await asyncio.sleep(self.scheduling_interval)
 
     async def _process_pending_tasks(self):
         """Process pending tasks and assign them to workers."""
@@ -102,14 +103,15 @@ class TaskScheduler:
             if success:
                 logger.info(f"Assigned task {task.id} to worker {worker.id}")
 
-                # Update available workers list
-                for i, w in enumerate(available_workers):
+                # Update worker in available_workers list for next iteration
+                # Use filter to avoid modifying list during iteration
+                for w in available_workers:
                     if w.id == worker.id:
-                        if w.available_slots <= 1:
-                            available_workers.pop(i)
-                        else:
-                            w.used_slots += 1
+                        w.used_slots += 1
                         break
+                
+                # Filter out workers with no available slots for next round
+                available_workers = [w for w in available_workers if w.available_slots > 0]
             else:
                 logger.error(f"Failed to assign task {task.id} to worker {worker.id}")
 
