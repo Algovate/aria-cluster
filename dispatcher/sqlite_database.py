@@ -28,7 +28,9 @@ class SQLiteDatabase(DatabaseInterface):
 
     def _ensure_dir_exists(self):
         """Ensure the directory for the database exists."""
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
 
     def _create_tables(self):
         """Create database tables if they don't exist."""
@@ -255,19 +257,42 @@ class SQLiteDatabase(DatabaseInterface):
         update_values = []
 
         for key, value in kwargs.items():
-            if hasattr(task, key):
-                if key == 'options' or key == 'result':
-                    update_fields.append(f"{key} = ?")
-                    update_values.append(json.dumps(value))
-                elif key == 'status':
-                    update_fields.append(f"{key} = ?")
-                    update_values.append(value.value)
-                elif key == 'priority':
-                    update_fields.append(f"{key} = ?")
-                    update_values.append(value.value if hasattr(value, 'value') else value)
+            if not hasattr(task, key):
+                continue
+
+            if key in {'options', 'result'}:
+                update_fields.append(f"{key} = ?")
+                update_values.append(json.dumps(value))
+            elif key == 'status':
+                status_value = value
+                if isinstance(value, TaskStatus):
+                    status_value = value.value
+                elif isinstance(value, str):
+                    try:
+                        status_value = TaskStatus(value).value
+                    except ValueError:
+                        logger.warning(f"Ignoring invalid task status '{value}' for task {task_id}")
+                        continue
                 else:
-                    update_fields.append(f"{key} = ?")
-                    update_values.append(value)
+                    logger.warning(f"Ignoring unsupported status type {type(value)} for task {task_id}")
+                    continue
+                update_fields.append(f"{key} = ?")
+                update_values.append(status_value)
+            elif key == 'priority':
+                priority_value = value
+                if hasattr(value, 'value'):
+                    priority_value = value.value
+                elif isinstance(value, str):
+                    try:
+                        priority_value = TaskPriority[value.upper()].value
+                    except KeyError:
+                        logger.warning(f"Ignoring invalid task priority '{value}' for task {task_id}")
+                        continue
+                update_fields.append(f"{key} = ?")
+                update_values.append(priority_value)
+            else:
+                update_fields.append(f"{key} = ?")
+                update_values.append(value)
 
         # Always update the updated_at timestamp
         now = datetime.now().isoformat()

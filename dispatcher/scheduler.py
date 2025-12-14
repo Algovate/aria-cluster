@@ -21,6 +21,7 @@ class TaskScheduler:
         self.config = config
         self.running = False
         self.scheduling_lock = asyncio.Lock()
+        self._round_robin_index = 0
 
         # Extract configuration
         # The strategy used to select which worker a task should be assigned to.
@@ -121,8 +122,11 @@ class TaskScheduler:
             return None
 
         if self.task_assignment_strategy == "round_robin":
-            # Simple round-robin
-            return available_workers[0]
+            # Simple round-robin using a rotating index
+            index = self._round_robin_index % len(available_workers)
+            worker = available_workers[index]
+            self._round_robin_index = (self._round_robin_index + 1) % len(available_workers)
+            return worker
 
         elif self.task_assignment_strategy == "random":
             # Random selection

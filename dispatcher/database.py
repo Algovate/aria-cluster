@@ -66,7 +66,30 @@ class MemoryDatabase(DatabaseInterface):
             return None
 
         for key, value in kwargs.items():
-            if hasattr(task, key):
+            if not hasattr(task, key):
+                continue
+
+            if key == "status":
+                if isinstance(value, TaskStatus):
+                    setattr(task, key, value)
+                elif isinstance(value, str):
+                    try:
+                        setattr(task, key, TaskStatus(value))
+                    except ValueError:
+                        logger.warning(f"Ignoring invalid task status '{value}' for task {task_id}")
+                else:
+                    logger.warning(f"Ignoring unsupported status type {type(value)} for task {task_id}")
+            elif key == "priority":
+                if isinstance(value, TaskPriority):
+                    setattr(task, key, value)
+                elif isinstance(value, str):
+                    try:
+                        setattr(task, key, TaskPriority[value.upper()])
+                    except KeyError:
+                        logger.warning(f"Ignoring invalid task priority '{value}' for task {task_id}")
+                else:
+                    setattr(task, key, value)
+            else:
                 setattr(task, key, value)
 
         task.updated_at = datetime.now()

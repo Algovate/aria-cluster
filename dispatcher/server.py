@@ -6,7 +6,6 @@ import json
 import logging
 import asyncio
 from typing import Dict, List, Any, Optional
-from datetime import datetime
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -280,7 +279,7 @@ async def worker_websocket(websocket: WebSocket, worker_id: str):
         if worker_tasks:
             await websocket.send_text(json.dumps({
                 "action": "initial_tasks",
-                "tasks": [task.model_dump() for task in worker_tasks]
+                "tasks": [task.model_dump(mode="json") for task in worker_tasks]
             }))
 
         # Handle messages
@@ -295,9 +294,12 @@ async def worker_websocket(websocket: WebSocket, worker_id: str):
         if worker_id in connected_workers:
             del connected_workers[worker_id]
 
-        # Update worker status
+        # Update worker status and unassign tasks so scheduler can retry them
         worker = await database.get_worker(worker_id)
         if worker:
+            for task_id in list(worker.current_tasks):
+                await database.unassign_task_from_worker(task_id)
+                await database.update_task(task_id, status=TaskStatus.PENDING)
             await database.update_worker(worker_id, status=WorkerStatus.OFFLINE)
 
 
